@@ -1,0 +1,35 @@
+Ok ini lanjutan dari case sebelumnya 
+
+1. cegah switch layer 2 menjadi root bridge
+2. percepat koneksi end device 
+3. cegah port dari rogue device
+
+configure terminal
+interface GigabitEthernet 0/1
+ description UPLINK_TO_CORE_SWITCH
+ switchport mode trunk
+ switchport trunk encapsulation dot1q
+ switchport trunk allowed vlan 200,201,202,203,230,240,250
+ switchport nonegotiate   ! mencegah DTP dari VLAN HOPPING
+ spanning-tree guard root ! mencegah root bridge
+end
+
+interface GigabitEthernet 0/2
+configure terminal
+interface GigabitEthernet 0/2
+ description Ext
+ switchport mode trunk                   
+ switchport trunk encapsulation dot1q
+ switchport trunk allowed vlan 230,250   
+ spanning-tree guard root                   
+
+ #di jadikan guard root karna ext menjadi mini switch supaya tidak menjadi root bridge
+ #tidak diaktifkan port fast karna mode trunk resiko looping lebih tinggi
+ 
+ configure terminal
+interface GigabitEthernet 0/4
+ description IP_CCTV_CAMERA
+ switchport mode access            
+ switchport access vlan 260        
+ spanning-tree portfast            ! Percepat koneksi untuk end-device
+ spanning-tree bpduguard enable    ! mencegah rogue device

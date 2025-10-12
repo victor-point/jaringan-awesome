@@ -1,0 +1,72 @@
+LAYER 2 to end device
+step by step manage switch cisco ios command
+1. hostname = WWTP
+2. disable telnet enable SSH line vty 5 15, enable password = cisco user=admin
+3. encyrption password 
+4. create vlan dan name vlan
+
+   dengan keterangan sebagai berikut
+	vlan 200 switch
+	vlan 201 wifi
+	vlan 202 finger
+	vlan 203 attandance
+	vlan 230 IP PC
+	vlan 240 IP DHCP
+	vlan 250 IP EXT
+5. manage port 
+	port 1 master dari coreswitch 
+	port 2 untuk ext fanvil dan ke pc , ext sebagai WAN dan to pc sebagai LAN
+	port 3 Unifi device vlan wifi sebagai native VLAN dan trunk untuk IP DHCP
+    port 4 setting port untuk cctv
+	interface vlan 200 dengan ip 182.82.200.151 supaya bisa di remote
+
+#NOTE mini switch with ext fanvil vlan 250(WAN) vlan 230(LAN)
+#NOTE beberapa versi IOS untuk setting VLAN, dengan command vlan database 
+
+=====Config dasar dan security======
+configure terminal hostname WWTP
+enable service password-encryption
+enable secret cisco
+ip domain name local.net crypto key generate rsa 1024
+line vty 5 15 transport input ssh login local
+username admin privilege 15 secret cisco 
+interface Vlan200 ip address 182.82.200.151 255.255.255.0 no shutdown
+
+======Config VLAN & Name==============
+conf ter
+vlan 200 name IP_SWITCH	
+vlan 201	IP_WiFi 
+vlan 202	IP_Finger	
+vlan 203	Attandance	
+vlan 230	IP_PC	
+vlan 240	IP_DHCP 
+vlan 250	IP_EXT
+valn 260    IP_CCTV
+
+configure terminal
+interface GigabitEthernet 0/1
+ description from core-sw
+ switchport mode trunk
+ switchport trunk encapsulation dot1q
+ switchport trunk allowed vlan 200,201,202,203,230,240,250
+
+interface GigabitEthernet 0/2
+ description jumper PC lara
+ switchport mode trunk                   
+ switchport trunk encapsulation dot1q
+ switchport trunk allowed vlan 230,250        
+
+interface GigabitEthernet 0/3
+ description UNIFI
+ switchport mode trunk
+ switchport trunk encapsulation dot1q
+ switchport trunk native vlan 201
+ switchport trunk allowed vlan 201,240
+
+interface GigabitEthernet 0/4
+ description CCTV
+ switchport mode access
+ switchport access vlan 260
+wr save exit
+
+#NOTE cek show vlan dan show interface dan show running 
