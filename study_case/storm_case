@@ -1,1 +1,2 @@
-ada 3 strom_control cisco limit setting tergantung kebutuhan
+ada 3 strom_control cisco limit setting tergantung kebutuhan# Push branch 'master' ke remote 'origin'
+git push -u origin master
