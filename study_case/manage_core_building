@@ -1,0 +1,58 @@
+#create vlan seperti manage_dasar
+conf ter
+ip routing                   #layer 3 aktifkan SVI untuk routing
+
+interface Vlan200
+ description DEFAULT_GATEWAY_SW
+ ip address 182.82.200.1 255.255.255.0
+ no shutdown
+
+ interface Vlan201
+ description DEFAULT_GATEWAY_WiFi
+ ip address 182.82.201.1 255.255.255.0   <-- IP Utama (Primary)
+ ip address 192.168.10.1 255.255.255.0 secondary   <-- IP Sekunder
+ no shutdown
+
+ 
+interface Vlan202
+ description DEFAULT_GATEWAY_VLAN_PC
+ ip address 182.82.202.1 255.255.255.0
+ no shutdown
+
+interface Vlan203
+ description DEFAULT_GATEWAY_ATT
+ ip address 182.82.203.1 255.255.255.0
+ no shutdown
+
+#dan seterusnya
+
+
+# lanjut  switching
+
+interface GigabitEthernet 0/1
+ description UPLINK_TO_CS_SERVER
+ switchport mode trunk
+ switchport trunk encapsulation dot1q
+ switchport trunk allowed vlan 200,201,202,203,230,240,250,260
+ switchport nonegotiate
+ spanning-tree guard root      ! Mencegah switch ini menjadi Root Bridge di jaringan Server
+end
+
+interface GigabitEthernet 0/2
+ description TRUNK_TO_GEDUNG_UTARA
+ switchport mode trunk
+ switchport trunk encapsulation dot1q
+ switchport trunk allowed vlan 200,201,202,203,230,240,250,260
+ switchport nonegotiate
+end
+
+interface GigabitEthernet 0/3
+ description TRUNK_TO_GEDUNG_SELATAN
+ switchport mode trunk
+ switchport trunk encapsulation dot1q
+ switchport trunk allowed vlan 200,201,202,203,230,240,250,260
+ switchport nonegotiate
+end
+
+end
+copy running-config startup-config
