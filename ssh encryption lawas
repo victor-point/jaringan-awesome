@@ -2,7 +2,7 @@
 >> # Legacy Cisco switch
 >> Host legacy-switch
 >>     HostName 172.26.100.*
->>     User jvadmin
+>>     User #userswitch
 >>     KexAlgorithms +diffie-hellman-group1-sha1,diffie-hellman-group14-sha1
 >>     HostKeyAlgorithms +ssh-rsa,ssh-dss
 >>     Ciphers +aes128-cbc,3des-cbc,aes192-cbc,aes256-cbc
