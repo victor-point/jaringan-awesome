@@ -1,0 +1,423 @@
+#=======================================
+# Skrip Menu Manajemen Switch Cisco
+# Versi PowerShell (Native Windows SSH)
+# Menggunakan C:\Users\IT\.ssh\config secara otomatis
+#=======================================
+
+# --- DAFTAR IP SWITCH (Bisa diedit) ---
+# Ini adalah "Combobox" Anda.
+# Tambahkan semua 100 switch Anda di sini dengan format:
+# "Nama-Mudah-Diingat" = "IP.Address.Anda"
+$Global:SwitchList = @{
+    "SW-CORE-A" = "142.46.200.97"
+    "SW-LANTAI-2" = "142.46.200.152"
+    "SW-GUDANG" = "142.46.200.50"
+    "SW-FINANCE" = "142.46.200.51"
+    # Tambahkan 96 switch lainnya di sini
+}
+
+# --- Variabel Global ---
+$Global:Switch_IP = ""
+$Global:SSH_User = ""
+$Global:Selected_Switch_Name = "" # Untuk tampilan UI
+
+# --- Fungsi untuk mengirim perintah "config" ---
+# $1: String multiline berisi perintah
+function Send-ConfigCommands {
+    param (
+        [string]$CommandsToSend
+    )
+    
+    Write-Host "`nPerintah berikut akan dikirim ke $Global:Switch_IP:" -ForegroundColor Yellow
+    Write-Host "==============================================" -ForegroundColor Yellow
+    Write-Host $CommandsToSend
+    Write-Host "==============================================" -ForegroundColor Yellow
+    
+    $confirm = Read-Host "Lanjutkan? (y/n)"
+    if ($confirm -ne 'y') {
+        Write-Host "Dibatalkan." -ForegroundColor Red
+        return
+    }
+
+    Write-Host "`nMenghubungi $($Global:SSH_User)@$($Global:Switch_IP)..." -ForegroundColor Cyan
+    Write-Host "ANDA AKAN DIMINTA PASSWORD SWITCH SEKARANG:" -ForegroundColor Cyan
+
+    # INI ADALAH KUNCINYA:
+    # Kita "piping" string perintah ke 'ssh -t'
+    # 'ssh -t' memaksa sesi interaktif, yang memicu prompt password.
+    # PowerShell otomatis membaca file .ssh/config Anda.
+    
+    $CommandsToSend + "`nexit`n" | ssh -t "$($Global:SSH_User)@$($Global:Switch_IP)"
+
+    Write-Host "`nPerintah berhasil dikirim." -ForegroundColor Cyan
+    Read-Host "Tekan [Enter] untuk kembali ke menu..."
+}
+
+# --- Fungsi untuk mengirim perintah "show" ---
+# $1: Perintah show yang akan dieksekusi
+function Send-ShowCommand {
+    param (
+        [string]$CommandToShow
+    )
+    
+    Write-Host "`nMenjalankan '$CommandToShow' di $Global:Switch_IP..." -ForegroundColor Cyan
+    Write-Host "ANDA AKAN DIMINTA PASSWORD SWITCH SEKARANG:" -ForegroundColor Cyan
+
+    # --- PERBAIKAN BUG DIMULAI DI SINI ---
+    
+    # 1. Jalankan SSH dan simpan semua output (termasuk error) ke variabel $output
+    #    Tanda '2>&1' penting untuk menangkap pesan error jika ada
+    $output = ssh -t "$($Global:SSH_User)@$($Global:Switch_IP)" $CommandToShow 2>&1
+    
+    # 2. SETELAH perintah SSH selesai dan koneksi ditutup,
+    #    baru kita kirimkan isi variabel $output ke Pager.
+    #    Kita pipe dulu ke Out-String agar formatnya rapi.
+    $output | Out-String | Out-Host -Paging
+    
+    # --- PERBAIKAN BUG SELESAI ---
+    
+    Write-Host "`nSelesai." -ForegroundColor Cyan
+    Read-Host "Tekan [Enter] untuk kembali ke menu..."
+}
+
+# --- Menu untuk Konfigurasi Port (VERSI REVISI) ---
+function Config-PortMenu {
+    Clear-Host
+    Write-Host "============================================" -ForegroundColor Cyan
+    Write-Host "  Konfigurasi Port untuk: $Global:Switch_IP" -ForegroundColor Cyan
+    Write-Host "============================================" -ForegroundColor Cyan
+    
+    # --- LOGIKA BARU: Pilih Tipe Interface ---
+    $if_type = Read-Host "[1] Port Tunggal (g0/1) atau [2] Range Port (g0/1-10)?"
+    
+    $if_short_name = ""
+    if ($if_type -eq '1') {
+        $if_short_name = Read-Host "Masukkan nama interface (e.g., g0/1, f0/23)"
+    } elseif ($if_type -eq '2') {
+        $if_short_name = Read-Host "Masukkan range interface (e.g., g0/1-10, f0/5-8)"
+    } else {
+        Write-Host "Pilihan tidak valid." -ForegroundColor Red
+        Start-Sleep -Seconds 1
+        return
+    }
+
+    # Otomatis ekspansi nama interface
+    $full_if_name = ""
+    if ($if_short_name.StartsWith('g')) {
+        $full_if_name = "GigabitEthernet" + $if_short_name.Substring(1)
+    } elseif ($if_short_name.StartsWith('f')) {
+        $full_if_name = "FastEthernet" + $if_short_name.Substring(1)
+    } else {
+        $full_if_name = $if_short_name # Gunakan apa adanya
+    }
+
+    # Tentukan apakah 'interface' atau 'interface range'
+    $full_if_string = ""
+    if ($if_type -eq '2') {
+        $full_if_string = "interface range $full_if_name"
+    } else {
+        $full_if_string = "interface $full_if_name"
+    }
+
+    Write-Host "Perintah akan diterapkan pada: $full_if_string" -ForegroundColor Yellow
+
+    # --- MENU BARU ---
+    Write-Host "`nApa yang ingin Anda lakukan pada $full_if_name?"
+    Write-Host " 1. Set ACCESS VLAN"
+    Write-Host " 2. Set TRUNK VLAN"
+    Write-Host " 3. Set TRUNK NATIVE VLAN"
+    Write-Host " 4. No Shutdown Port"
+    Write-Host " 5. Shutdown Port"
+    Write-Host " 9. Kembali ke Menu Utama"
+    $port_choice = Read-Host "Pilihan"
+
+    $commands = ""
+    switch ($port_choice) {
+        '1' { # Set ACCESS VLAN
+            Clear-Host
+            Write-Host "--- Set ACCESS VLAN untuk $full_if_string ---"
+            $sub_choice = Read-Host "[1] Terapkan Mode Access, [2] Hapus Mode Access (Reset)"
+            
+            if ($sub_choice -eq '1') {
+                $vlan_id = Read-Host "Masukkan VLAN ID"
+                $desc = Read-Host "Masukkan Deskripsi [ACCESS_PORT]"
+                if ([string]::IsNullOrEmpty($desc)) { $desc = "ACCESS_PORT" }
+                
+                $commands = @"
+conf t
+$full_if_string
+description $desc
+switchport mode access
+switchport access vlan $vlan_id
+spanning-tree portfast edge
+no shutdown
+end
+"@
+                Send-ConfigCommands $commands
+
+            } elseif ($sub_choice -eq '2') {
+                $commands = @"
+conf t
+$full_if_string
+no description
+no switchport access vlan
+no spanning-tree portfast
+switchport mode dynamic desirable
+end
+"@
+                Send-ConfigCommands $commands
+            }
+        }
+        '2' { # Set TRUNK VLAN
+            Clear-Host
+            Write-Host "--- Set TRUNK VLAN untuk $full_if_string ---"
+            $sub_choice = Read-Host "[1] Terapkan Mode Trunk, [2] Hapus Mode Trunk (Reset)"
+
+            if ($sub_choice -eq '1') {
+                $native_vlan = Read-Host "Masukkan NATIVE VLAN ID"
+                $allowed_vlan = Read-Host "Masukkan ALLOWED VLANs (e.g., 10,20,50-60)"
+                $desc = Read-Host "Masukkan Deskripsi [TRUNK_PORT]"
+                if ([string]::IsNullOrEmpty($desc)) { $desc = "TRUNK_PORT" }
+
+                $commands = @"
+conf t
+$full_if_string
+description $desc
+switchport mode trunk
+switchport trunk native vlan $native_vlan
+switchport trunk allowed vlan $allowed_vlan
+no shutdown
+end
+"@
+                Send-ConfigCommands $commands
+
+            } elseif ($sub_choice -eq '2') {
+                $commands = @"
+conf t
+$full_if_string
+no description
+no switchport trunk allowed vlan
+no switchport trunk native vlan
+no switchport mode trunk
+end
+"@
+                Send-ConfigCommands $commands
+            }
+        }
+        '3' { # Set TRUNK NATIVE VLAN (Saja) <-- PERUBAHAN DI SINI
+            Clear-Host
+            Write-Host "--- Set TRUNK NATIVE VLAN untuk $full_if_string ---"
+            $sub_choice = Read-Host "[1] Terapkan/Ubah Native VLAN, [2] Hapus Native VLAN (Reset)"
+
+            if ($sub_choice -eq '1') {
+                $vlan_id = Read-Host "Masukkan NATIVE VLAN ID baru"
+                
+                $commands = @"
+conf t
+$full_if_string
+switchport trunk native vlan $vlan_id
+end
+"@
+                Send-ConfigCommands $commands
+
+            } elseif ($sub_choice -eq '2') {
+                $commands = @"
+conf t
+$full_if_string
+no switchport trunk native vlan
+end
+"@
+                Send-ConfigCommands $commands
+            }
+        }
+        '4' { # No Shutdown Port
+            $commands = @"
+conf t
+$full_if_string
+no shutdown
+end
+"@
+            Send-ConfigCommands $commands
+        }
+        '5' { # Shutdown Port
+            $commands = @"
+conf t
+$full_if_string
+shutdown
+end
+"@
+            Send-ConfigCommands $commands
+        }
+        '9' {
+            return
+        }
+        default {
+            Write-Host "Pilihan tidak valid." -ForegroundColor Red
+            Start-Sleep -Seconds 1
+        }
+    }
+}
+
+# --- Menu untuk Perintah "Show" ---
+function Show-CommandsMenu {
+    Clear-Host
+    Write-Host "============================================" -ForegroundColor Cyan
+    Write-Host "  Perintah 'Show' untuk: $Global:Switch_IP" -ForegroundColor Cyan
+    Write-Host "============================================" -ForegroundColor Cyan
+    Write-Host " 1. show vlan brief"
+    Write-Host " 2. show running-config"
+    Write-Host " 3. show interface status"
+    Write-Host " 4. show interfaces trunk"
+    Write-Host " 5. show ip interface brief"
+    Write-Host " 9. Kembali ke Menu Utama"
+    $show_choice = Read-Host "Pilihan"
+
+    switch ($show_choice) {
+        '1' { Send-ShowCommand "show vlan brief" }
+        '2' { Send-ShowCommand "show running-config" }
+        '3' { Send-ShowCommand "show interface status" }
+        '4' { Send-ShowCommand "show interfaces trunk" }
+        '5' { Send-ShowCommand "show ip interface brief" }
+        '9' { return }
+        default { Write-Host "Pilihan tidak valid." -ForegroundColor Red; Start-Sleep -Seconds 1 }
+    }
+}
+
+# --- FUNGSI BARU: Menu untuk Memilih Switch ---
+function Select-SwitchMenu {
+    Clear-Host
+    Write-Host "============================================" -ForegroundColor Cyan
+    Write-Host "           PILIH SWITCH TARGET"
+    Write-Host "============================================" -ForegroundColor Cyan
+
+    # Ubah hashtable ke array agar bisa di-indeks dan disortir
+    $switches = $Global:SwitchList.GetEnumerator() | Sort-Object Name
+    
+    # Tampilkan sebagai daftar bernomor
+    for ($i = 0; $i -lt $switches.Count; $i++) {
+        # Format string: "[ 1] Nama-Switch        (IP.Address)"
+        Write-Host (" [{0,2}] {1,-20} ({2})" -f ($i+1), $switches[$i].Name, $switches[$i].Value)
+    }
+    Write-Host " --------------------------------------------"
+    Write-Host " [99] Masukkan IP Manual (Jika tidak ada di list)"
+    Write-Host " [ 0] Batal"
+    Write-Host "============================================"
+    
+    $choice = Read-Host "Pilihan Anda"
+    
+    if ($choice -eq '0') {
+        return
+    }
+
+    if ($choice -eq '99') {
+        $Global:Switch_IP = Read-Host "Masukkan IP Manual"
+        $Global:Selected_Switch_Name = $Global:Switch_IP # Nama = IP
+        return
+    }
+
+    # Cek apakah pilihan valid (angka dan dalam jangkauan)
+    if ($choice -match "^\d+$" -and [int]$choice -ge 1 -and [int]$choice -le $switches.Count) {
+        $selectedIndex = [int]$choice - 1
+        $Global:Switch_IP = $switches[$selectedIndex].Value
+        $Global:Selected_Switch_Name = $switches[$selectedIndex].Name
+        Write-Host "Target IP diset ke: $($Global:Switch_IP)" -ForegroundColor Cyan
+    } else {
+        Write-Host "Pilihan tidak valid." -ForegroundColor Red
+        $Global:Switch_IP = ""
+        $Global:Selected_Switch_Name = ""
+        Start-Sleep -Seconds 1
+    }
+}
+
+
+# --- Menu Utama ---
+function Main-Menu {
+    while ($true) {
+        Clear-Host
+        Write-Host "============================================" -ForegroundColor Cyan
+        Write-Host "      MENU MANAJEMEN SWITCH                 "
+        Write-Host "============================================" -ForegroundColor Cyan
+        
+        # PERUBAHAN TAMPILAN: Menampilkan nama switch
+        if (-not [string]::IsNullOrEmpty($Global:Selected_Switch_Name)) {
+            Write-Host "Target Switch: " -NoNewline; Write-Host "$($Global:Selected_Switch_Name) ($($Global:Switch_IP))" -ForegroundColor Yellow
+        } else {
+            Write-Host "Target Switch: " -NoNewline; Write-Host "Belum di-set" -ForegroundColor Yellow
+        }
+        Write-Host "User SSH     : " -NoNewline; Write-Host "$($Global:SSH_User)" -ForegroundColor Yellow
+        
+        Write-Host "--------------------------------------------"
+        
+        # --- PERUBAHAN WARNA SESUAI PERMINTAAN ANDA ---
+        Write-Host " 1. Set Target Switch & User" -ForegroundColor Yellow  # Setup = Kuning
+        Write-Host " 2. Konfigurasi Port" -ForegroundColor Cyan     # Diubah ke Biru Cerah
+        Write-Host " 3. Jalankan Perintah 'Show'" -ForegroundColor Cyan         # Diubah ke Biru Cerah
+        Write-Host " 4. Buka Sesi SSH Interaktif" -ForegroundColor Cyan    # Diubah ke Biru Cerah
+        Write-Host " 9. Keluar" -ForegroundColor Gray                 
+        # --- AKHIR PERUBAHAN WARNA ---
+        
+        Write-Host "--------------------------------------------"
+        $main_choice = Read-Host "Pilihan Anda"
+        
+        switch ($main_choice) {
+            '1' {
+                # PERUBAHAN LOGIKA: Panggil menu pilihan
+                Select-SwitchMenu 
+                
+                # Setelah IP dipilih, baru tanyakan User
+                if (-not [string]::IsNullOrEmpty($Global:Switch_IP)) {
+                    $user_input = Read-Host "Masukkan User SSH [it]"
+                    if ([string]::IsNullOrEmpty($user_input)) {
+                        $Global:SSH_User = "it"
+                    } else {
+                        $Global:SSH_User = $user_input # <-- PERBAIKAN DI SINI (dari SSH_Rser)
+                    }
+                    Write-Host "Target diset ke $($Global:SSH_User)@$($Global:Selected_Switch_Name)" -ForegroundColor Cyan
+                    Start-Sleep -Seconds 1
+                }
+            }
+            '2' {
+                if ([string]::IsNullOrEmpty($Global:Switch_IP) -or [string]::IsNullOrEmpty($Global:SSH_User)) {
+                    Write-Host "Harap set Target Switch & User (Pilihan 1) terlebih dahulu." -ForegroundColor Red
+                    Start-Sleep -Seconds 2
+                } else {
+                    Config-PortMenu
+                }
+            }
+            '3' {
+                if ([string]::IsNullOrEmpty($Global:Switch_IP) -or [string]::IsNullOrEmpty($Global:SSH_User)) {
+                    Write-Host "Harap set Target Switch & User (Pilihan 1) terlebih dahulu." -ForegroundColor Red
+                    Start-Sleep -Seconds 2
+                } else {
+                    Show-CommandsMenu
+                }
+            }
+            '4' { # Sesi Interaktif normal
+                if ([string]::IsNullOrEmpty($Global:Switch_IP) -or [string]::IsNullOrEmpty($Global:SSH_User)) {
+                    Write-Host "Harap set Target Switch & User (Pilihan 1) terlebih dahulu." -ForegroundColor Red
+                    Start-Sleep -Seconds 2
+                } else {
+                    Write-Host "Membuka sesi SSH ke $($Global:SSH_User)@$($Global:Switch_IP)..." -ForegroundColor Cyan
+                    Write-Host "ANDA AKAN DIMINTA PASSWORD SWITCH SEKARANG:" -ForegroundColor Cyan
+                    # Cukup panggil ssh, dia akan otomatis jadi interaktif
+                    ssh "$($Global:SSH_User)@$($Global:Switch_IP)"
+                    Write-Host "Sesi ditutup." -ForegroundColor Cyan
+                    Read-Host "Tekan [Enter] untuk kembali ke menu..."
+                }
+            }
+            '9' {
+                Write-Host "Keluar."
+                break # Keluar dari loop while($true)
+            }
+            default {
+                Write-Host "Pilihan tidak valid." -ForegroundColor Red
+                Start-Sleep -Seconds 1
+            }
+        }
+    }
+}
+
+# --- Jalankan Skrip ---
+Main-Menu
+
+
