@@ -1,12 +1,11 @@
- Set-Content -Path "$env:USERPROFILE\.ssh\config" -Value @"
->> # Legacy Cisco switch
->> Host legacy-switch
->>     HostName 172.26.100.*
->>     User #userswitch
->>     KexAlgorithms +diffie-hellman-group1-sha1,diffie-hellman-group14-sha1
->>     HostKeyAlgorithms +ssh-rsa,ssh-dss
->>     Ciphers +aes128-cbc,3des-cbc,aes192-cbc,aes256-cbc
->>     MACs +hmac-md5,hmac-sha1,hmac-sha1-96
->>     PubkeyAcceptedAlgorithms +ssh-rsa
->>     StrictHostKeyChecking no
->> "@ -Encoding ascii -Force
+Set-Content -Path "$env:USERPROFILE\.ssh\config" -Value @"
+# PENGATURAN GLOBAL UNTUK SEMUA SWITCH LEGACY
+Host 172.26.100.*
+    # Baris 'User' sengaja dihapus agar bisa input manual
+    KexAlgorithms +diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1
+    HostKeyAlgorithms +ssh-rsa,ssh-dss
+    Ciphers +aes128-cbc,3des-cbc,aes192-cbc,aes256-cbc
+    MACs +hmac-md5,hmac-sha1,hmac-sha1-96
+    PubkeyAcceptedAlgorithms +ssh-rsa
+    StrictHostKeyChecking no
+"@ -Encoding ascii -Force
