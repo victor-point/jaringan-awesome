@@ -1,6 +1,6 @@
 Set-Content -Path "$env:USERPROFILE\.ssh\config" -Value @"
 # PENGATURAN GLOBAL UNTUK SEMUA SWITCH LEGACY
-Host 172.26.100.*
+Host 172.*.100.*
     # Baris 'User' sengaja dihapus agar bisa input manual
     KexAlgorithms +diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1
     HostKeyAlgorithms +ssh-rsa,ssh-dss
